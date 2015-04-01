@@ -7,7 +7,7 @@ import logging
 
 LOG = logging.getLogger(__name__)
 
-BACKUP_DIR = '/home/coffee/learning'
+BACKUP_DIR = '/var/backup/fuel'
 
 dir_list = {}
 file_list = {}
