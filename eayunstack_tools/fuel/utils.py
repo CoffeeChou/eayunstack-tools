@@ -1,7 +1,6 @@
 # @file utils.py
 import os
 import commands
-import time
 from prettytable import PrettyTable
 import logging
 
@@ -12,48 +11,62 @@ BACKUP_DIR = '/var/backup/fuel'
 dir_list = {}
 file_list = {}
 
-def backup_new():
-    (stat, out) = commands.getstatusoutput('dockerctl backup')
-    return (stat, out)
 
 def backup_list():
-    backup_dirs = os.listdir(BACKUP_DIR + '/')
-    backup_dirs.sort(compare)
-    i = 1
-    t = PrettyTable(['ID', 'Create Time', 'File Name'])
-    # when taking restore, there will be dirs named 'restore'. will not list 'restore' dir.
-    not_backup = 'restore'
-    for backup_dir in backup_dirs:
-        if not_backup in backup_dir:
-            continue
-        elif os.path.isfile(BACKUP_DIR + '/' + backup_dir):
-            c_time = backup_dir[12:25] + ':' + backup_dir[25:27]
-            backup_file = backup_dir
-            file_list[i] = backup_file
-        else:
-            c_time = backup_dir[7:20] + ':' + backup_dir[20:22]
-            backup_file = os.listdir(BACKUP_DIR + '/' + backup_dir + '/')
-            dir_list[i] = backup_dir
-            file_list[i] = backup_file[0]
-        # Put the result in a dictory, every sub-dir has only one backup file
-        t.add_row([i, c_time, file_list[i]])
+    """List all the backup file"""
+    lines = read_db()
+    i = 1 
+    t = PrettyTable(['ID', 'Backup Time', 'Backup File'])
+    for line in lines:
+        # Delete the '\n' at the end of the line
+        line = line.strip('\n')
+        id = line.split(' ')[0]
+        backup_file = line.split(' ')[1]
+        file_split = backup_file.split('_', 4)
+        # Get the backup time from filename
+        c_date = file_split[2]
+        c_time = file_split[3].split('.', 1)[0][:2] \
+                 + ':' + \ 
+                 file_split[3].split('.', 1)[0][2:]
+        t.add_row([i, c_date + ' ' + c_time, backup_file])
         i += 1
     return t
 
-def restore_backup(id):
-    backup_list()
-    backup_file = BACKUP_DIR + '/' + dir_list[id] + '/' + file_list[id]
-    (stat, out) = commands.getstatusoutput('dockerctl restore %s' % (backup_file))
-    return (stat, out)
 
-# Sort the file, the file of most recent content modification will located at the end of the table
-def compare(x, y): 
-    stat_x = os.stat(BACKUP_DIR + '/' + x)
-    stat_y = os.stat(BACKUP_DIR + '/' + y)
-    if stat_x.st_mtime > stat_y.st_mtime:
-        return 1
-    elif stat_x.st_mtime < stat_y.st_mtime:
-        return -1
-    else:
-        return 0
+def read_db():
+    """Get Lines as List"""
+    if not os.path.exists('/tmp/tools.db'):
+        os.mknod('/tmp/tools.db')
+    db = open('/tmp/tools.db')
+    lines = db.readlines()
+    db.close()
+    return lines
+
+def latest_backup():
+    """Get The Latest Backup File"""
+    # The latest backup file means the new backup file
+    # Use sorted() method to sort by filename
+    backup_dirs = sorted(os.listdir(BACKUP_DIR + '/'))
+    not_backup = 'restore'
+    if len(backup_dirs) != 0:
+        i = 1
+        while True:
+            if not_backup in backup_dirs[-i]:
+                i += 1
+            elif os.path.isfile(BACKUP_DIR + '/' + backup_dirs[-i]):
+                # FIXME: Did not consider isfile
+                i += 1
+            else:
+                latest_backup = os.listdir(BACKUP_DIR + '/' + backup_dirs[-i] + '/')[0]
+                return latest_backup
+                break
+
+
+def write_db():
+    # append
+    db = open('/tmp/tools.db', 'a')
+    backup_file = latest_backup()
+    db.writelines('%s' % id + ' ' + '%s\n' % backup_file)
+    db.close()
+
 
